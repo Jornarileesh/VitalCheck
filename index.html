@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f7fb">
+  <meta name="color-scheme" content="light">
+  <title>VitalCheck — ciśnienie i puls</title>
+  <style>
+    :root {
+      --bg: #f6f7fb; --panel: #fff; --text: #252b42; --muted: #6a7185;
+      --line: #e9ebf2; --accent: #6556cf; --soft: #f0edff;
+      --sys: #7461d6; --dia: #398b9b; --pulse: #cc657b; --danger: #ab304a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text); background: var(--bg); font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    button, input { font: inherit; }
+    button { cursor: pointer; color: inherit; -webkit-tap-highlight-color: transparent; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button, input, summary { touch-action: manipulation; }
+    button:focus-visible, input:focus-visible, summary:focus-visible {
+      outline: 3px solid var(--accent); outline-offset: 4px;
+    }
+    button { transition: background .15s, box-shadow .15s; }
+    [hidden] { display: none !important; }
+    .shell { max-width: 1120px; margin: auto; padding: 0 36px 32px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; height: 106px; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 23px; font-weight: 750; letter-spacing: -.8px; }
+    .brand-mark { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 13px; background: var(--accent); color: white; }
+    .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .today { font-size: 13px; color: var(--muted); }
+    .heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 20px 0 27px; }
+    h1 { margin: 0; font-size: clamp(28px, 4vw, 35px); letter-spacing: -1.2px; font-weight: 700; }
+    h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.3px; }
+    .primary { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 46px; padding: 12px 20px; border: 0; border-radius: 13px; color: #fff; background: var(--accent); font-size: 14px; font-weight: 650; }
+    .primary:hover { background: #5547ba; box-shadow: 0 5px 15px #6556cf25; }
+    .secondary { min-height: 44px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 11px; background: white; font-size: 13px; }
+    .secondary:hover, .icon-button:hover { background: var(--bg); }
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
+    .card, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 21px; }
+    .card { padding: 22px 24px; }
+    .card-label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sys); display: inline-block; flex-shrink: 0; }
+    .dot.dia { background: var(--dia); }
+    .dot.pulse { background: var(--pulse); }
+    .metric { font-size: clamp(29px, 4vw, 39px); font-weight: 650; letter-spacing: -1.5px; margin-top: 13px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .metric small { font-size: 12px; color: var(--muted); font-weight: 400; letter-spacing: 0; margin-left: 6px; white-space: nowrap; }
+    .card-note { margin-top: 9px; font-size: 12px; color: var(--muted); min-height: 16px; }
+    .chart-panel { padding: 25px 26px 20px; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
+    .range { display: flex; gap: 3px; padding: 4px; border-radius: 11px; background: var(--bg); }
+    .range button { border: 0; background: transparent; color: var(--muted); min-height: 36px; padding: 8px 14px; border-radius: 8px; font-size: 12px; white-space: nowrap; }
+    .range button[aria-pressed="true"] { background: white; color: var(--accent); box-shadow: 0 2px 5px #252b420c; font-weight: 650; }
+    .legend { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; margin: 23px 0 6px; font-size: 12px; color: var(--muted); }
+    .legend span { display: inline-flex; gap: 7px; align-items: center; }
+    .legend .unit { margin-left: auto; font-size: 11px; }
+    .chart { width: 100%; height: 228px; display: block; overflow: visible; }
+    .pulse-chart { height: 125px; }
+    .chart text { font-family: inherit; fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .chart .grid { stroke: var(--line); stroke-dasharray: 3 5; }
+    .chart .series { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+    .chart .point { stroke: white; stroke-width: 2; }
+    .chart .selection { stroke: #9a91c7; stroke-dasharray: 4 4; }
+    .chart-footer { border-top: 1px solid var(--line); margin-top: 13px; padding-top: 14px; display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+    .chart-controls { display: flex; gap: 6px; }
+    .icon-button { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 10px; background: white; }
+    .empty { min-height: 300px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: var(--muted); font-size: 14px; text-align: center; }
+    .empty-icon { color: var(--accent); background: var(--soft); border-radius: 20px; padding: 19px; }
+    .empty-icon .icon { width: 32px; height: 32px; display: block; }
+    .history { margin-top: 28px; }
+    .count { color: var(--muted); font-size: 12px; margin-left: 8px; font-weight: 400; }
+    .history-list { margin-top: 16px; overflow: hidden; }
+    .history-row { padding: 16px 22px; display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 12px; align-items: center; }
+    .history-row + .history-row { border-top: 1px solid var(--line); }
+    .reading-date { font-size: 13px; font-weight: 550; }
+    .reading-time { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .reading-value { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.4px; }
+    .reading-value small { display: block; color: var(--muted); font-size: 10px; font-weight: 400; letter-spacing: 0; margin-top: 4px; }
+    .row-actions { display: flex; gap: 6px; }
+    .row-actions .icon-button { border: 0; color: var(--muted); }
+    .row-actions .delete:hover { color: var(--danger); background: #fff1f4; }
+    .more { display: block; margin: 14px auto 0; }
+    .no-history { padding: 25px; text-align: center; font-size: 13px; color: var(--muted); }
+    footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 28px; color: var(--muted); font-size: 11px; flex-wrap: wrap; }
+    footer details { max-width: 420px; }
+    footer summary { cursor: pointer; padding: 10px 0; }
+    footer details p { line-height: 1.6; margin: 5px 0; }
+    .backup-actions { display: flex; gap: 8px; }
+    .backup-actions button { font-size: 12px; }
+    .error-banner { border: 1px solid #f0ccd5; background: #fff1f4; color: #922a40; padding: 14px 18px; border-radius: 12px; font-size: 13px; line-height: 1.5; margin-bottom: 20px; }
+    dialog { padding: 0; border: 1px solid var(--line); border-radius: 24px; width: min(470px, calc(100% - 28px)); max-height: calc(100dvh - 28px); color: var(--text); box-shadow: 0 24px 100px #252b4225; }
+    dialog::backdrop { background: #24283965; backdrop-filter: blur(4px); }
+    .dialog-content { padding: 26px; }
+    .dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 25px; }
+    .dialog-head h2 { font-size: 22px; }
+    .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+    .input-row.vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    label { display: block; min-width: 0; font-size: 12px; font-weight: 550; color: var(--muted); }
+    input { display: block; min-width: 0; width: 100%; margin-top: 8px; height: 48px; padding: 10px 11px; background: var(--bg); color: var(--text); border: 1px solid #dfe2ed; border-radius: 11px; font-size: 16px; }
+    .vitals input { font-size: 26px; text-align: center; height: 66px; padding: 10px 4px; font-variant-numeric: tabular-nums; }
+    input::placeholder { color: #a8aabd; opacity: 1; }
+    .input-unit { display: block; text-align: center; margin-top: 7px; font-size: 10px; font-weight: 400; }
+    .form-error { color: var(--danger); font-size: 13px; line-height: 1.5; margin: 0 0 16px; }
+    .save { width: 100%; margin-top: 4px; }
+    .toast { position: fixed; bottom: max(22px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); padding: 13px 20px; background: var(--text); color: white; border-radius: 13px; font-size: 13px; box-shadow: 0 5px 25px #252b4220; z-index: 10; max-width: calc(100% - 32px); text-align: center; }
+    @media (max-width: 640px) {
+      .shell { padding: 0 16px 24px; }
+      .topbar { height: 80px; }
+      .brand { font-size: 21px; }
+      .today { font-size: 11px; }
+      .heading { margin: 14px 0 21px; }
+      .heading .primary { padding: 12px 14px; }
+      .cards { gap: 9px; margin-bottom: 16px; }
+      .card { padding: 15px 11px; border-radius: 15px; }
+      .card-label { font-size: 10px; gap: 5px; }
+      .card-label .dot { width: 6px; height: 6px; }
+      .metric { font-size: 28px; letter-spacing: -1px; }
+      .metric small { display: block; margin: 6px 0 0; font-size: 10px; }
+      .card-note { font-size: 10px; margin-top: 8px; line-height: 1.4; }
+      .chart-panel { padding: 20px 15px 14px; border-radius: 18px; }
+      .chart-panel .panel-head { gap: 17px; }
+      .range { width: 100%; }
+      .range button { flex: 1; padding: 8px 5px; }
+      .legend { gap: 13px; font-size: 10px; }
+      .legend .unit { font-size: 10px; }
+      .chart { height: 205px; }
+      .pulse-chart { height: 115px; }
+      .chart-footer { font-size: 11px; gap: 8px; }
+      .history-row { padding: 14px 12px; gap: 8px; grid-template-columns: 1.2fr .9fr .65fr auto; }
+      .reading-date { font-size: 11px; }
+      .reading-time { font-size: 11px; }
+      .reading-value { font-size: 16px; }
+      .row-actions { gap: 0; }
+      .row-actions .icon-button { width: 36px; height: 44px; }
+      .row-actions .icon { width: 17px; }
+      footer { gap: 6px; }
+      .backup-actions { width: 100%; }
+      .backup-actions button { flex: 1; }
+      .dialog-content { padding: 21px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" style="position:absolute;overflow:hidden">
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/><path d="M3 12h4l2-4 3 8 2-4h7"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="m15 5 4 4M4 20l5-1L20 8a2.8 2.8 0 0 0-4-4L5 15l-1 5Z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
+  </svg>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark"><svg class="icon"><use href="#i-heart"/></svg></span>VitalCheck</div>
+      <time class="today" id="today"></time>
+    </header>
+    <div class="heading">
+      <h1>Twoje pomiary</h1>
+      <button class="primary" id="add"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Dodaj pomiar</button>
+    </div>
+    <div id="storage-error" class="error-banner" role="alert" hidden></div>
+    <section class="cards" aria-label="Ostatni pomiar">
+      <article class="card">
+        <div class="card-label"><i class="dot"></i>Skurczowe</div>
+        <div class="metric"><span id="latest-sys">—</span><small>mmHg</small></div>
+        <div class="card-note latest-date">Brak pomiarów</div>
+      </article>
+      <article class="card">
+        <div class="card-label"><i class="dot dia"></i>Rozkurczowe</div>
+        <div class="metric"><span id="latest-dia">—</span><small>mmHg</small></div>
+        <div class="card-note latest-date">Brak pomiarów</div>
+      </article>
+      <article class="card">
+        <div class="card-label"><i class="dot pulse"></i>Puls</div>
+        <div class="metric"><span id="latest-pulse">—</span><small>ud./min</small></div>
+        <div class="card-note latest-date">Brak pomiarów</div>
+      </article>
+    </section>
+    <section class="panel chart-panel" aria-labelledby="chart-heading">
+      <div class="panel-head">
+        <h2 id="chart-heading">Przebieg pomiarów</h2>
+        <div class="range" role="group" aria-label="Zakres wykresu">
+          <button data-days="7" aria-pressed="false">7 dni</button>
+          <button data-days="30" aria-pressed="true">30 dni</button>
+          <button data-days="90" aria-pressed="false">90 dni</button>
+          <button data-days="all" aria-pressed="false">Wszystko</button>
+        </div>
+      </div>
+      <div class="empty" id="empty-chart">
+        <div class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg></div>
+        <span id="empty-label">Dodaj pierwszy pomiar</span>
+      </div>
+      <div id="charts" hidden>
+        <div class="legend"><span><i class="dot"></i>Skurczowe</span><span><i class="dot dia"></i>Rozkurczowe</span><span class="unit">mmHg</span></div>
+        <svg class="chart" id="bp-chart" role="img" aria-label="Wykres ciśnienia"></svg>
+        <div class="legend"><span><i class="dot pulse"></i>Puls</span><span class="unit">ud./min</span></div>
+        <svg class="chart pulse-chart" id="pulse-chart" role="img" aria-label="Wykres pulsu"></svg>
+        <div class="chart-footer">
+          <output id="selected-reading" aria-live="polite"></output>
+          <div class="chart-controls">
+            <button class="icon-button" id="previous" aria-label="Poprzedni pomiar"><svg class="icon" aria-hidden="true"><use href="#i-left"/></svg></button>
+            <button class="icon-button" id="next" aria-label="Następny pomiar"><svg class="icon" aria-hidden="true"><use href="#i-right"/></svg></button>
+          </div>
+        </div>
+        <div class="chart-footer" id="averages"></div>
+      </div>
+    </section>
+    <section class="history" aria-labelledby="history-heading">
+      <div class="panel-head"><h2 id="history-heading">Historia<span class="count" id="history-count">0</span></h2></div>
+      <div class="panel history-list" id="history-list"></div>
+      <button class="secondary more" id="more" hidden>Pokaż więcej</button>
+    </section>
+    <footer>
+      <details><summary>Dane tylko w tej przeglądarce</summary><p>Wyczyszczenie danych przeglądarki usuwa pomiary. W trybie prywatnym zapis jest tymczasowy. Eksportuj kopię przed zmianą urządzenia, przeglądarki lub lokalizacji pliku HTML.</p></details>
+      <div class="backup-actions">
+        <button class="secondary" id="export">Eksportuj dane</button>
+        <button class="secondary" id="import">Importuj dane</button>
+      </div>
+      <input type="file" id="import-file" accept=".json,application/json" hidden aria-label="Plik kopii zapasowej">
+    </footer>
+  </main>
+  <dialog id="measurement-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-content">
+      <div class="dialog-head">
+        <h2 id="dialog-title">Nowy pomiar</h2>
+        <button class="icon-button" id="close-dialog" aria-label="Zamknij"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
+      <form id="measurement-form">
+        <div class="input-row vitals">
+          <label>Skurczowe<input id="systolic" name="systolic" type="text" inputmode="numeric" pattern="[0-9]{1,3}" maxlength="3" placeholder="120" autocomplete="off" required autofocus><span class="input-unit">mmHg</span></label>
+          <label>Rozkurczowe<input id="diastolic" name="diastolic" type="text" inputmode="numeric" pattern="[0-9]{1,3}" maxlength="3" placeholder="80" autocomplete="off" required><span class="input-unit">mmHg</span></label>
+          <label>Puls<input id="pulse" name="pulse" type="text" inputmode="numeric" pattern="[0-9]{1,3}" maxlength="3" placeholder="69" autocomplete="off" required><span class="input-unit">ud./min</span></label>
+        </div>
+        <div class="input-row">
+          <label>Data<input id="date" name="date" type="date" min="1900-01-01" max="9999-12-31" required></label>
+          <label>Godzina<input id="time" name="time" type="time" required></label>
+        </div>
+        <p class="form-error" id="form-error" role="alert" hidden></p>
+        <button class="primary save" type="submit">Zapisz pomiar</button>
+      </form>
+    </div>
+  </dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <noscript><p class="error-banner">Włącz JavaScript, aby zapisywać pomiary i wyświetlać wykresy.</p></noscript>
+  <script>
+    "use strict";
+    const STORAGE_KEY = "vitalcheck.measurements.v1";
+    const $ = id => document.getElementById(id);
+    const shortDate = new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "short" });
+    const fullDate = new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "short", year: "numeric" });
+    const axisDate = new Intl.DateTimeFormat("pl-PL", { day: "2-digit", month: "2-digit" });
+    const axisTime = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit" });
+    let records = [], filtered = [], days = "30", selectedId = null, editingId = null;
+    let historyLimit = 10, storageReady = false, toastTimer, resizeFrame;
+    const pad = value => String(value).padStart(2, "0");
+    const localDate = date => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    const localTime = date => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    const timestamp = record => new Date(`${record.date}T${record.time}:00`).getTime();
+    const sortRecords = list => list.sort((a, b) => timestamp(a) - timestamp(b) || a.id.localeCompare(b.id));
+
+    function validationError(record) {
+      if (!record || typeof record !== "object") return "Nieprawidłowy pomiar.";
+      if (!Number.isInteger(record.systolic) || record.systolic < 1 || record.systolic > 350 ||
+          !Number.isInteger(record.diastolic) || record.diastolic < 1 || record.diastolic > 350)
+        return "Ciśnienie: wpisz pełne liczby od 1 do 350 mmHg.";
+      if (record.systolic <= record.diastolic) return "Ciśnienie skurczowe musi być wyższe niż rozkurczowe.";
+      if (!Number.isInteger(record.pulse) || record.pulse < 1 || record.pulse > 300)
+        return "Puls: wpisz pełną liczbę od 1 do 300 ud./min.";
+      if (typeof record.date !== "string" || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(record.date) ||
+          record.date < "1900-01-01" || typeof record.time !== "string" || !/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(record.time))
+        return "Podaj prawidłową datę i godzinę.";
+      const date = new Date(`${record.date}T${record.time}:00`);
+      if (!Number.isFinite(date.getTime()) || localDate(date) !== record.date || localTime(date) !== record.time)
+        return "Podaj prawidłową datę i godzinę.";
+      return "";
+    }
+
+    function parseBackup(text) {
+      const data = JSON.parse(text);
+      if (!data || data.version !== 1 || !Array.isArray(data.measurements))
+        throw new Error("Nieprawidłowy format kopii VitalCheck.");
+      const ids = new Set();
+      return sortRecords(data.measurements.map(record => {
+        const error = validationError(record);
+        if (error || typeof record.id !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(record.id) || ids.has(record.id))
+          throw new Error(error || "Nieprawidłowe lub powtórzone identyfikatory pomiarów.");
+        ids.add(record.id);
+        return { id: record.id, systolic: record.systolic, diastolic: record.diastolic,
+          pulse: record.pulse, date: record.date, time: record.time };
+      }));
+    }
+
+    function readStorage() {
+      const text = localStorage.getItem(STORAGE_KEY);
+      return text === null ? [] : parseBackup(text);
+    }
+
+    function showStorageError(message) {
+      $("storage-error").textContent = message;
+      $("storage-error").hidden = false;
+    }
+
+    function loadStorage() {
+      try {
+        records = readStorage();
+        storageReady = true;
+        $("storage-error").hidden = true;
+      } catch (error) {
+        storageReady = false;
+        showStorageError(`Nie można odczytać lokalnych danych. Zapis jest zablokowany, aby ich nie nadpisać. ${error.message}`);
+      }
+      render();
+    }
+
+    function persist(update) {
+      if (!storageReady) {
+        showStorageError("Zapis jest zablokowany. Sprawdź dostęp do danych przeglądarki i otwórz plik ponownie.");
+        return false;
+      }
+      try {
+        const next = sortRecords(update(readStorage()));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, measurements: next }));
+        records = next;
+        $("storage-error").hidden = true;
+        render();
+        return true;
+      } catch (error) {
+        showStorageError(`Nie zapisano zmian. ${error.message} Sprawdź dostęp i wolne miejsce w pamięci przeglądarki.`);
+        return false;
+      }
+    }
+
+    function toast(message) {
+      clearTimeout(toastTimer);
+      $("toast").textContent = message;
+      $("toast").hidden = false;
+      toastTimer = setTimeout(() => { $("toast").hidden = true; }, 3500);
+    }
+
+    function openForm(record = null) {
+      $("measurement-form").reset();
+      editingId = record ? record.id : null;
+      $("dialog-title").textContent = record ? "Edytuj pomiar" : "Nowy pomiar";
+      const now = new Date();
+      $("date").value = record ? record.date : localDate(now);
+      $("time").value = record ? record.time : localTime(now);
+      for (const field of ["systolic", "diastolic", "pulse"]) $(field).value = record ? record[field] : "";
+      $("form-error").hidden = true;
+      $("measurement-dialog").showModal();
+      $("systolic").focus();
+    }
+
+    function render() {
+      const now = new Date();
+      $("today").textContent = fullDate.format(now);
+      $("today").dateTime = localDate(now);
+      const latest = records[records.length - 1];
+      $("latest-sys").textContent = latest ? latest.systolic : "—";
+      $("latest-dia").textContent = latest ? latest.diastolic : "—";
+      $("latest-pulse").textContent = latest ? latest.pulse : "—";
+      document.querySelectorAll(".latest-date").forEach(element => {
+        element.textContent = latest ? `${shortDate.format(new Date(timestamp(latest)))} · ${latest.time}` : "Brak pomiarów";
+      });
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (days !== "all") start.setDate(start.getDate() - Number(days) + 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      filtered = days === "all" ? records.slice() : records.filter(record => timestamp(record) >= start.getTime() && timestamp(record) < end.getTime());
+      if (!filtered.some(record => record.id === selectedId)) selectedId = filtered.length ? filtered[filtered.length - 1].id : null;
+      $("charts").hidden = filtered.length === 0;
+      $("empty-chart").hidden = filtered.length > 0;
+      $("empty-label").textContent = records.length ? "Brak pomiarów w tym okresie" : "Dodaj pierwszy pomiar";
+      $("export").disabled = !storageReady || records.length === 0;
+      $("import").disabled = !storageReady;
+      $("add").disabled = !storageReady;
+      renderCharts();
+      renderHistory();
+    }
+
+    function svgElement(tag, attrs = {}, text) {
+      const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, String(value));
+      if (text !== undefined) element.textContent = text;
+      return element;
+    }
+
+    function renderChart(id, series, height) {
+      const svg = $(id);
+      const width = Math.max(240, svg.getBoundingClientRect().width);
+      const left = 35, right = width - 17, top = 14, bottom = height - 30;
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      svg.replaceChildren();
+      const values = filtered.flatMap(record => series.map(item => record[item.key]));
+      let min = Infinity, max = -Infinity;
+      for (const value of values) { min = Math.min(min, value); max = Math.max(max, value); }
+      const step = Math.max(10, Math.ceil((max - min + 10) / 4 / 10) * 10);
+      min = Math.max(0, Math.floor((min - 5) / step) * step);
+      max = Math.max(min + step * 2, Math.ceil((max + 5) / step) * step);
+      const first = timestamp(filtered[0]), last = timestamp(filtered[filtered.length - 1]);
+      const x = time => first === last ? (left + right) / 2 : left + (time - first) / (last - first) * (right - left);
+      const y = value => bottom - (value - min) / (max - min) * (bottom - top);
+      for (let value = min; value <= max; value += step) {
+        svg.append(svgElement("line", { x1: left, x2: right, y1: y(value), y2: y(value), class: "grid" }));
+        svg.append(svgElement("text", { x: left - 9, y: y(value) + 4, "text-anchor": "end" }, value));
+      }
+      const selected = filtered.find(record => record.id === selectedId);
+      if (selected) svg.append(svgElement("line", { x1: x(timestamp(selected)), x2: x(timestamp(selected)), y1: top, y2: bottom, class: "selection" }));
+      for (const item of series) {
+        svg.append(svgElement("polyline", {
+          points: filtered.map(record => `${x(timestamp(record))},${y(record[item.key])}`).join(" "),
+          class: "series", stroke: item.color
+        }));
+        for (const record of filtered) {
+          const point = svgElement("circle", { cx: x(timestamp(record)), cy: y(record[item.key]),
+            r: record.id === selectedId ? 5.5 : 3.5, fill: item.color, class: "point" });
+          point.append(svgElement("title", {}, `${record.date} ${record.time} · ${item.label}: ${record[item.key]}`));
+          svg.append(point);
+        }
+      }
+      const sameDay = filtered[0].date === filtered[filtered.length - 1].date;
+      const tickCount = first === last ? 1 : width < 450 ? 3 : 5;
+      const usedLabels = new Set();
+      for (let i = 0; i < tickCount; i++) {
+        const time = tickCount === 1 ? first : first + (last - first) * i / (tickCount - 1);
+        const label = (sameDay ? axisTime : axisDate).format(new Date(time));
+        if (usedLabels.has(label)) continue;
+        usedLabels.add(label);
+        svg.append(svgElement("text", { x: x(time), y: height - 7,
+          "text-anchor": tickCount === 1 ? "middle" : i === 0 ? "start" : i === tickCount - 1 ? "end" : "middle" }, label));
+      }
+      svg.setAttribute("aria-label", `${id === "bp-chart" ? "Ciśnienie" : "Puls"}: ${filtered.length} pomiarów. ${fullDate.format(new Date(first))} – ${fullDate.format(new Date(last))}. Wartości w historii poniżej.`);
+      svg.onclick = event => {
+        const bounds = svg.getBoundingClientRect();
+        const position = (event.clientX - bounds.left) * width / bounds.width;
+        let nearest = filtered[0];
+        for (const record of filtered) {
+          if (Math.abs(x(timestamp(record)) - position) < Math.abs(x(timestamp(nearest)) - position)) nearest = record;
+        }
+        selectedId = nearest.id;
+        renderCharts();
+      };
+    }
+
+    function renderCharts() {
+      if (!filtered.length) return;
+      const mobile = window.matchMedia("(max-width: 640px)").matches;
+      renderChart("bp-chart", [
+        { key: "systolic", label: "Skurczowe", color: "var(--sys)" },
+        { key: "diastolic", label: "Rozkurczowe", color: "var(--dia)" }
+      ], mobile ? 205 : 228);
+      renderChart("pulse-chart", [{ key: "pulse", label: "Puls", color: "var(--pulse)" }], mobile ? 115 : 125);
+      const index = filtered.findIndex(record => record.id === selectedId);
+      const selected = filtered[index];
+      $("selected-reading").textContent = `${shortDate.format(new Date(timestamp(selected)))} · ${selected.time} · ${selected.systolic}/${selected.diastolic} mmHg · ${selected.pulse} ud./min`;
+      $("previous").disabled = index <= 0;
+      $("next").disabled = index >= filtered.length - 1;
+      const average = key => Math.round(filtered.reduce((sum, record) => sum + record[key], 0) / filtered.length);
+      $("averages").replaceChildren();
+      const summary = document.createElement("span");
+      summary.textContent = `Średnia: ${average("systolic")}/${average("diastolic")} mmHg · ${average("pulse")} ud./min`;
+      const count = document.createElement("span");
+      count.textContent = `Liczba pomiarów: ${filtered.length}`;
+      $("averages").append(summary, count);
+    }
+
+    function makeIconButton(icon, label, action, extraClass = "") {
+      const button = document.createElement("button");
+      button.className = `icon-button ${extraClass}`;
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      const svg = svgElement("svg", { class: "icon", "aria-hidden": "true" });
+      svg.append(svgElement("use", { href: `#i-${icon}` }));
+      button.append(svg);
+      button.addEventListener("click", action);
+      return button;
+    }
+
+    function renderHistory() {
+      $("history-count").textContent = records.length;
+      $("history-list").replaceChildren();
+      $("more").hidden = records.length <= historyLimit;
+      if (!records.length) {
+        const empty = document.createElement("div");
+        empty.className = "no-history";
+        empty.textContent = "Brak zapisanych pomiarów";
+        $("history-list").append(empty);
+        return;
+      }
+      for (const record of records.slice().reverse().slice(0, historyLimit)) {
+        const row = document.createElement("article");
+        row.className = "history-row";
+        const date = document.createElement("div");
+        const day = document.createElement("div");
+        day.className = "reading-date";
+        day.textContent = fullDate.format(new Date(timestamp(record)));
+        const time = document.createElement("div");
+        time.className = "reading-time";
+        time.textContent = record.time;
+        date.append(day, time);
+        const pressure = document.createElement("div");
+        pressure.className = "reading-value";
+        pressure.textContent = `${record.systolic}/${record.diastolic}`;
+        const pressureUnit = document.createElement("small");
+        pressureUnit.textContent = "mmHg";
+        pressure.append(pressureUnit);
+        const pulse = document.createElement("div");
+        pulse.className = "reading-value";
+        pulse.style.color = "var(--pulse)";
+        pulse.textContent = record.pulse;
+        const pulseUnit = document.createElement("small");
+        pulseUnit.textContent = "ud./min";
+        pulse.append(pulseUnit);
+        const actions = document.createElement("div");
+        actions.className = "row-actions";
+        const label = `${record.date}, ${record.time}`;
+        const edit = makeIconButton("edit", `Edytuj pomiar: ${label}`, () => openForm(record));
+        const remove = makeIconButton("trash", `Usuń pomiar: ${label}`, () => {
+          if (!window.confirm(`Usunąć pomiar ${record.systolic}/${record.diastolic}, ${record.pulse} ud./min z ${record.date}, ${record.time}?`)) return;
+          if (persist(current => current.filter(item => item.id !== record.id))) toast("Usunięto pomiar");
+        }, "delete");
+        edit.disabled = remove.disabled = !storageReady;
+        actions.append(edit, remove);
+        row.append(date, pressure, pulse, actions);
+        $("history-list").append(row);
+      }
+    }
+
+    $("add").addEventListener("click", () => openForm());
+    $("close-dialog").addEventListener("click", () => $("measurement-dialog").close());
+    $("measurement-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const record = { id: editingId || crypto.randomUUID(), systolic: Number($("systolic").value),
+        diastolic: Number($("diastolic").value), pulse: Number($("pulse").value),
+        date: $("date").value, time: $("time").value };
+      const error = validationError(record);
+      if (error) {
+        $("form-error").textContent = error;
+        $("form-error").hidden = false;
+        return;
+      }
+      const saved = persist(current => {
+        if (editingId && !current.some(item => item.id === editingId))
+          throw new Error("Ten pomiar został usunięty w innej karcie.");
+        return [...current.filter(item => item.id !== record.id), record];
+      });
+      if (saved) {
+        $("measurement-dialog").close();
+        toast(editingId ? "Zapisano zmiany" : "Zapisano pomiar");
+      } else {
+        $("form-error").textContent = $("storage-error").textContent;
+        $("form-error").hidden = false;
+      }
+    });
+    $("systolic").addEventListener("paste", event => {
+      const match = event.clipboardData.getData("text").trim().match(/^(\d{1,3})\s*\/\s*(\d{1,3})\s+(\d{1,3})$/);
+      if (!match) return;
+      event.preventDefault();
+      $("systolic").value = match[1];
+      $("diastolic").value = match[2];
+      $("pulse").value = match[3];
+    });
+    document.querySelectorAll("[data-days]").forEach(button => {
+      button.addEventListener("click", () => {
+        days = button.dataset.days;
+        document.querySelectorAll("[data-days]").forEach(item => item.setAttribute("aria-pressed", String(item === button)));
+        render();
+      });
+    });
+    for (const [id, direction] of [["previous", -1], ["next", 1]]) {
+      $(id).addEventListener("click", () => {
+        const index = filtered.findIndex(record => record.id === selectedId);
+        const record = filtered[index + direction];
+        if (record) { selectedId = record.id; renderCharts(); }
+      });
+    }
+    $("more").addEventListener("click", () => { historyLimit += 20; renderHistory(); });
+    $("export").addEventListener("click", () => {
+      try {
+        const current = readStorage();
+        const blob = new Blob([JSON.stringify({ version: 1, measurements: current }, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `VitalCheck-${localDate(new Date())}.json`;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } catch (error) {
+        showStorageError(`Nie można wyeksportować danych. ${error.message}`);
+      }
+    });
+    $("import").addEventListener("click", () => $("import-file").click());
+    $("import-file").addEventListener("change", async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        if (file.size > 10 * 1024 * 1024) throw new Error("Plik jest zbyt duży (maks. 10 MB).");
+        const incoming = parseBackup(await file.text());
+        if (!incoming.length) throw new Error("Kopia nie zawiera pomiarów.");
+        if (!window.confirm(`Importować ${incoming.length} pomiarów? Istniejące dane pozostaną. Identyczne wpisy zostaną pominięte.`)) return;
+        let added = 0;
+        const signature = record => JSON.stringify([record.date, record.time, record.systolic, record.diastolic, record.pulse]);
+        const saved = persist(current => {
+          const signatures = new Set(current.map(signature));
+          const ids = new Set(current.map(record => record.id));
+          for (const record of incoming) {
+            if (signatures.has(signature(record))) continue;
+            const copy = { ...record, id: ids.has(record.id) ? crypto.randomUUID() : record.id };
+            current.push(copy);
+            signatures.add(signature(copy));
+            ids.add(copy.id);
+            added++;
+          }
+          return current;
+        });
+        if (saved) toast(added ? `Dodano pomiary: ${added}` : "Te pomiary są już zapisane");
+      } catch (error) {
+        showStorageError(`Nie zaimportowano danych. ${error.message}`);
+      } finally {
+        $("import-file").value = "";
+      }
+    });
+    window.addEventListener("storage", event => { if (event.key === STORAGE_KEY || event.key === null) loadStorage(); });
+    window.addEventListener("resize", () => {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(renderCharts);
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") loadStorage();
+    });
+    loadStorage();
+  </script>
+</body>
+</html>
