@@ -1,0 +1,16 @@
+{
+  "name": "vitalcheck",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && esbuild src/app.ts --bundle --format=iife --target=es2020 --charset=utf8 --outfile=app.js",
+    "watch": "esbuild src/app.ts --bundle --format=iife --target=es2020 --charset=utf8 --outfile=app.js --watch",
+    "test": "npm run build && node --test tests/app.test.cjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0",
+    "playwright": "^1.56.0",
+    "typescript": "^5.9.3"
+  }
+}
